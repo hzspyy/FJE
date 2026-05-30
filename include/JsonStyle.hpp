@@ -1,20 +1,19 @@
 #pragma once
 #include <IconStyle.hpp>
 #include <Node.hpp>
+#include <functional>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <unordered_map>
 
 using json = nlohmann::json;
-
 
 class JsonStyleFactory {
  public:
   virtual std::unique_ptr<Container> create(json& j) = 0;
   virtual ~JsonStyleFactory() = default;
 };
-
-
 
 class JsonFactory {
  public:
@@ -31,9 +30,8 @@ class JsonFactory {
     auto it = registry.find(style);
     if (it != registry.end()) {
       return it->second();
-    } else {
-      return nullptr;
     }
+    return nullptr;
   }
 
  private:

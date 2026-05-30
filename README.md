@@ -2,29 +2,30 @@
 a json file visualized command line interface tool
 
 # Installation
-重构版本切换至refactor分支
 ```bash
-git clone --recurse-submodules https://github.com/Debris150383/FJE.git
-# external/json has a .git directory, remove it
+git clone --recurse-submodules https://github.com/hzspyy/FJE.git
 cd FJE
-rm -rf .git
+cmake -S . -B build
+cmake --build build
 ```
 
 # Usage
-1. 修改src/main.cpp中的 `icon_file_path` 为 `icon_config.json` 的`绝对路径`！否则请确保运行FJE时icon_config.json在当前路径 
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+./build/FJE -f test/test.json -s tree -i star -c icon_config.json
+./build/FJE -f test/test.json -s rectangle -i pokerface -c icon_config.json
 ```
+
+如果省略 `-c/--icon-config`，FJE 默认从当前工作目录读取 `icon_config.json`。
+
 # 命令行参数
 
-Usage: FJE [--help] [--version] [-f VAR] [--style VAR] [--icon VAR]
+Usage: FJE [--help] [--version] --file VAR [--style VAR] [--icon VAR] [--icon-config VAR] [--output VAR]
 
-Optional arguments:  
-  -h, --help     shows help message and exits  
-  -v, --version  prints version information and exits  
-  -f             json file to be parsed  
-  -s, --style    Choose an icon style: rectangle or tree [nargs=0..1] [default: "tree"]  
-  -i, --icon     Choose an icon from the following pokerface star [nargs=0..1] [default: "star"]  
+Optional arguments:
+  -h, --help         shows help message and exits
+  -v, --version      prints version information and exits
+  -f, --file         json file to be parsed [required]
+  -s, --style        Choose a display style: rectangle or tree [nargs=0..1] [default: "tree"]
+  -i, --icon         Choose an icon style from the icon config [nargs=0..1] [default: "star"]
+  -c, --icon-config  Path to icon config json [nargs=0..1] [default: "icon_config.json"]
+  -o, --output       Output to a file [nargs=0..1] [default: ""]

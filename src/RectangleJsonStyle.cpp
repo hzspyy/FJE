@@ -1,5 +1,23 @@
 #include <RectangleJsonStyle.hpp>
 
+#include <algorithm>
+#include <cassert>
+#include <iostream>
+#include <string_view>
+
+namespace {
+
+int utf8CodePointCount(std::string_view text) {
+  int count = 0;
+  for (const unsigned char ch : text) {
+    if ((ch & 0xC0) != 0x80) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+}  // namespace
 
 void RectangleJson::draw() {
   int maxLength = 0;
@@ -12,8 +30,9 @@ void RectangleJson::draw() {
   }
 }
 
-void RectangleJson::drawHelper(std::unique_ptr<Node>& node, int level, bool isFirstRoot,
-                               bool isLastRoot, int maxLength) {
+void RectangleJson::drawHelper(std::unique_ptr<Node>& node, int level,
+                               bool isFirstRoot, bool isLastRoot,
+                               int maxLength) {
   if (node == nullptr) {
     return;
   }
@@ -38,7 +57,7 @@ int RectangleJson::calculateMaxLength(std::unique_ptr<Node>& node, int level) {
     return 0;
   }
 
-  int maxLength = node->render().length() + level * 8;
+  int maxLength = utf8CodePointCount(node->render()) + level * 8;
   Container* container = dynamic_cast<Container*>(node.get());
   if (container != nullptr) {
     for (auto&& child : container->children) {
@@ -52,18 +71,13 @@ void RectangleJson::printLine(std::string content, int level, bool isFirst,
                               bool isLast, int maxLength) {
   std::string indent = "";
   for (int i = 0; i < level - 1; i++) {
-    if (isLast)
-      indent += "└─ ";
-    else
-      indent += "│  ";
+    indent += "│  ";
   }
   std::string prefix = isFirst ? "┌─ " : (isLast ? "└─ " : "├─ ");
   std::string line = indent + prefix + content;
-  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-  std::wstring wide_line = converter.from_bytes(line);
 
-  int padding = maxLength - wide_line.length();
-  assert(padding > 0 && "padding must be positive");
+  int padding = maxLength - utf8CodePointCount(line);
+  assert(padding >= 0 && "padding must be non-negative");
   line += std::string(padding, '-');
 
   if (isFirst) {
@@ -76,9 +90,9 @@ void RectangleJson::printLine(std::string content, int level, bool isFirst,
 }
 
 struct RectangleJsonStyleFactoryRegistrar {
-    RectangleJsonStyleFactoryRegistrar() {
-        JsonFactory::registerFactory("rectangle", [] {
-            return std::make_unique<RectangleJsonStyleFactory>();
-        });
-    }
-} rectangleJsonStyleFactoryRegistrar; // 全局变量，构造函数在程序启动时运行
+  RectangleJsonStyleFactoryRegistrar() {
+    JsonFactory::registerFactory("rectangle", [] {
+      return std::make_unique<RectangleJsonStyleFactory>();
+    });
+  }
+} rectangleJsonStyleFactoryRegistrar;  // 全局变量，构造函数在程序启动时运行
