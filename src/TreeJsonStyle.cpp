@@ -1,42 +1,42 @@
 #include <TreeJsonStyle.hpp>
 
-void TreeJson::draw() {
+void TreeJson::draw(std::ostream& out, const IconStyle& icon) const {
   for (size_t i = 0; i < children.size(); i++) {
-    drawHelper(children[i], "", i == children.size() - 1);
+    drawHelper(out, children[i], "", i == children.size() - 1, icon);
   }
 }
 
-void TreeJson::drawHelper(std::unique_ptr<Node>& node,string indent, bool isLast) {
+void TreeJson::drawHelper(std::ostream& out, const std::unique_ptr<Node>& node,
+                          string indent, bool isLast,
+                          const IconStyle& icon) const {
   if (node == nullptr) {
     return;
   }
 
-  // Print the current node
-  std::cout << indent;
+  out << indent;
   if (isLast) {
-    std::cout << "└─ ";
-    indent += "   ";  // for next level, this is the end of the branch
+    out << "└─ ";
+    indent += "   ";
   } else {
-    std::cout << "├─ ";
-    indent += "│  ";  // for next level, the branch continues
+    out << "├─ ";
+    indent += "│  ";
   }
-  std::cout << node->render() << "\n";
+  out << node->render(icon) << "\n";
 
-  // If the node is a Container, print its children
   Container* container = dynamic_cast<Container*>(node.get());
   if (container != nullptr) {
     for (size_t i = 0; i < container->children.size(); i++) {
-      drawHelper(container->children[i], indent,
-                 i == container->children.size() - 1);
+      drawHelper(out, container->children[i], indent,
+                 i == container->children.size() - 1, icon);
     }
   }
 }
 
 
 struct TreeJsonStyleFactoryRegistrar {
-    TreeJsonStyleFactoryRegistrar() {
-        JsonFactory::registerFactory("tree", [] {
-            return std::make_unique<TreeJsonStyleFactory>();
-        });
-    }
-} treeJsonStyleFactoryRegistrar; // 全局变量，构造函数在程序启动时运行
+  TreeJsonStyleFactoryRegistrar() {
+    JsonFactory::registerFactory("tree", [] {
+      return std::make_unique<TreeJsonStyleFactory>();
+    });
+  }
+} treeJsonStyleFactoryRegistrar;  // 全局变量，构造函数在程序启动时运行
