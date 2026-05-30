@@ -6,12 +6,13 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 using json = nlohmann::json;
 
 class JsonStyleFactory {
  public:
-  virtual std::unique_ptr<Container> create(json& j) = 0;
+  virtual std::unique_ptr<Container> create(const json& j) = 0;
   virtual ~JsonStyleFactory() = default;
 };
 

@@ -1,32 +1,60 @@
 #include <Node.hpp>
 
-Icon& icon = Icon::getInstance();
+#include <cstddef>
+#include <string>
 
-string leaf::render() { return icon.leafIcon + key + ": " + value; }
+namespace {
 
-string Container::render() { return icon.containerIcon + key; }
+std::string iconPrefix(bool enabled, const std::string& value) {
+  return enabled ? value : "";
+}
 
-Container::Container(json& j, string key, unsigned level) {
-  // root has no key and value, just level = 0
+std::string arrayKey(size_t index) { return "[" + std::to_string(index) + "]"; }
+
+std::string scalarValue(const json& value) {
+  if (value.is_null()) {
+    return "null";
+  }
+  return value.dump();
+}
+
+void appendJson(Container& parent, const std::string& key, const json& value,
+                unsigned level) {
+  if (value.is_structured()) {
+    parent.children.push_back(std::make_unique<Container>(value, key, level));
+    return;
+  }
+
+  parent.children.push_back(std::make_unique<Leaf>(key, scalarValue(value)));
+}
+
+}  // namespace
+
+string Leaf::render(const IconStyle& icon) const {
+  return iconPrefix(icon.enabled, icon.leaf) + key + ": " + value;
+}
+
+string Container::render(const IconStyle& icon) const {
+  return iconPrefix(icon.enabled, icon.container) + key;
+}
+
+Container::Container(const json& j, string key, unsigned level) {
   this->level = level;
   this->key = key;
-  //将json库parse的data 变成 level 为 0 的Container children 
-  for (auto it = j.begin(); it != j.end(); ++it) {
-    if (it->is_object()) {
-      children.push_back(std::make_unique<Container>(it.value(), it.key(), level + 1));
-    } else if (it->is_array()) {
-      for (json::iterator arr_it = it->begin(); arr_it != it->end(); ++arr_it) {
-        if (arr_it->is_object()) {
-          children.push_back(
-              std::make_unique<Container>(*arr_it, it.key(), level + 1));
-        } else {
-          children.push_back(std::make_unique<leaf>(it.key(), arr_it->dump()));
-        }
-      }
-    } else if (it->is_null()) {
-      children.push_back(std::make_unique<leaf>(it.key(), ""));
-    } else {
-      children.push_back(std::make_unique<leaf>(it.key(), it.value().dump()));
+
+  if (j.is_object()) {
+    for (auto it = j.begin(); it != j.end(); ++it) {
+      appendJson(*this, it.key(), it.value(), level + 1);
     }
+    return;
   }
+
+  if (j.is_array()) {
+    for (size_t i = 0; i < j.size(); ++i) {
+      appendJson(*this, arrayKey(i), j.at(i), level + 1);
+    }
+    return;
+  }
+
+  children.push_back(std::make_unique<Leaf>("value", scalarValue(j)));
 }

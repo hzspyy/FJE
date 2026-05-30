@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <iostream>
 #include <string_view>
 
 namespace {
@@ -19,56 +18,63 @@ int utf8CodePointCount(std::string_view text) {
 
 }  // namespace
 
-void RectangleJson::draw() {
+void RectangleJson::draw(std::ostream& out, const IconStyle& icon) const {
   int maxLength = 0;
   for (auto&& child : children) {
-    maxLength = std::max(maxLength, calculateMaxLength(child, 1));
+    maxLength = std::max(maxLength, calculateMaxLength(child, 1, icon));
   }
 
   for (size_t i = 0; i < children.size(); i++) {
-    drawHelper(children[i], 1, i == 0, i == children.size() - 1, maxLength);
+    drawHelper(out, children[i], 1, i == 0, i == children.size() - 1,
+               maxLength, icon);
   }
 }
 
-void RectangleJson::drawHelper(std::unique_ptr<Node>& node, int level,
-                               bool isFirstRoot, bool isLastRoot,
-                               int maxLength) {
+void RectangleJson::drawHelper(std::ostream& out,
+                               const std::unique_ptr<Node>& node, int level,
+                               bool isFirstRoot, bool isLastRoot, int maxLength,
+                               const IconStyle& icon) const {
   if (node == nullptr) {
     return;
   }
-  std::string content = node->render();
+  std::string content = node->render(icon);
   Container* container = dynamic_cast<Container*>(node.get());
   bool isLastLine =
       isLastRoot && (container == nullptr || container->children.empty());
   bool isFirstLine = isFirstRoot;
 
-  printLine(content, level, isFirstLine, isLastLine, maxLength);
+  printLine(out, content, level, isFirstLine, isLastLine, maxLength);
 
   if (container != nullptr) {
     for (size_t i = 0; i < container->children.size(); i++) {
-      drawHelper(container->children[i], level + 1, false,
-                 isLastRoot && i == container->children.size() - 1, maxLength);
+      drawHelper(out, container->children[i], level + 1, false,
+                 isLastRoot && i == container->children.size() - 1, maxLength,
+                 icon);
     }
   }
 }
 
-int RectangleJson::calculateMaxLength(std::unique_ptr<Node>& node, int level) {
+int RectangleJson::calculateMaxLength(const std::unique_ptr<Node>& node,
+                                      int level,
+                                      const IconStyle& icon) const {
   if (node == nullptr) {
     return 0;
   }
 
-  int maxLength = utf8CodePointCount(node->render()) + level * 8;
+  int maxLength = utf8CodePointCount(node->render(icon)) + level * 8;
   Container* container = dynamic_cast<Container*>(node.get());
   if (container != nullptr) {
     for (auto&& child : container->children) {
-      maxLength = std::max(maxLength, calculateMaxLength(child, level + 1));
+      maxLength =
+          std::max(maxLength, calculateMaxLength(child, level + 1, icon));
     }
   }
   return maxLength;
 }
 
-void RectangleJson::printLine(std::string content, int level, bool isFirst,
-                              bool isLast, int maxLength) {
+void RectangleJson::printLine(std::ostream& out, std::string content, int level,
+                              bool isFirst, bool isLast,
+                              int maxLength) const {
   std::string indent = "";
   for (int i = 0; i < level - 1; i++) {
     indent += "│  ";
@@ -81,11 +87,11 @@ void RectangleJson::printLine(std::string content, int level, bool isFirst,
   line += std::string(padding, '-');
 
   if (isFirst) {
-    std::cout << line << "┐\n";
+    out << line << "┐\n";
   } else if (isLast) {
-    std::cout << line << "┘\n";
+    out << line << "┘\n";
   } else {
-    std::cout << line << "┤\n";
+    out << line << "┤\n";
   }
 }
 
