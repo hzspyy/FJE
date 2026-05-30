@@ -1,27 +1,89 @@
 #include <argparse/argparse.hpp>
-#include <cassert>
 #include <fstream>
+#include <iostream>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "FunnyJsonExplorer.hpp"
 #include "IconStyle.hpp"
 #include "JsonStyle.hpp"
-#include "Node.hpp"
 
 using json = nlohmann::json;
 
-int main(int argc, char** argv) {
-  // icon 配置文件 请使用绝对路径
-  std::string icon_file_path = "./icon_config.json";
-  // argparse 设置 
-  argparse::ArgumentParser program("FJE");
-  program.add_argument("-f").help("json file to be parsed");
+namespace {
 
-  // two styles  rectangle and tree
+constexpr char kDefaultIconConfigPath[] = "icon_config.json";
+
+json loadJsonFile(const std::string& path, const std::string& description) {
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    throw std::runtime_error(description + " not found: " + path);
+  }
+
+  try {
+    return json::parse(file);
+  } catch (const json::parse_error& err) {
+    throw std::runtime_error("Invalid " + description + ": " +
+                             std::string(err.what()));
+  }
+}
+
+std::vector<std::string> getIconNames(const json& iconConfig) {
+  if (!iconConfig.is_object()) {
+    throw std::runtime_error("Icon config must be a JSON object.");
+  }
+
+  std::vector<std::string> iconNames;
+  iconNames.reserve(iconConfig.size());
+  for (auto it = iconConfig.begin(); it != iconConfig.end(); ++it) {
+    iconNames.push_back(it.key());
+  }
+  return iconNames;
+}
+
+std::string joinIconNames(const std::vector<std::string>& iconNames) {
+  std::string joined;
+  for (const auto& name : iconNames) {
+    if (!joined.empty()) {
+      joined += ", ";
+    }
+    joined += name;
+  }
+  return joined;
+}
+
+void configureIcon(const json& iconConfig, const std::string& iconStyle) {
+  const auto iconIt = iconConfig.find(iconStyle);
+  if (iconIt == iconConfig.end()) {
+    throw std::runtime_error("Invalid icon: " + iconStyle +
+                             ". Available icons: " +
+                             joinIconNames(getIconNames(iconConfig)));
+  }
+
+  const json& iconStyleConfig = iconIt.value();
+  if (!iconStyleConfig.contains("leaf") ||
+      !iconStyleConfig.contains("container") ||
+      !iconStyleConfig["leaf"].is_string() ||
+      !iconStyleConfig["container"].is_string()) {
+    throw std::runtime_error("Icon style '" + iconStyle +
+                             "' must define string values for leaf and "
+                             "container.");
+  }
+
+  Icon& icon = Icon::getInstance();
+  icon.leafIcon = iconStyleConfig["leaf"].get<std::string>();
+  icon.containerIcon = iconStyleConfig["container"].get<std::string>();
+  icon.name = iconStyle;
+}
+
+void configureArgumentParser(argparse::ArgumentParser& program) {
+  program.add_argument("-f", "--file").required().help("json file to be parsed");
+
   program.add_argument("-s", "--style")
-      .help("Choose an icon style: rectangle or tree")
+      .help("Choose a display style: rectangle or tree")
       .default_value(std::string("tree"))
       .action([](const std::string& value) {
         if (value != "rectangle" && value != "tree") {
@@ -30,35 +92,34 @@ int main(int argc, char** argv) {
         return value;
       });
 
-  // n icons 根据 配置文件显示
-  json icon_config = json::parse(
-      std::ifstream(icon_file_path));
-  std::vector<std::string> iconNames;
-  for (auto it = icon_config.begin(); it != icon_config.end(); ++it) {
-    iconNames.push_back(it.key());
-  }
-
-  std::string iconHelpInfo = "Choose an icon from the following";
-  for (auto& icon : iconNames) {
-    iconHelpInfo += " " + icon;
-  }
   program.add_argument("-i", "--icon")
-      .help(iconHelpInfo)
-      .default_value(std::string("star"))
-      .action([&iconNames](const std::string& value) {
-        if (std::find(iconNames.begin(), iconNames.end(), value) ==
-            iconNames.end()) {
-          throw std::runtime_error("Invalid icon: " + value);
-        }
-        return value;
-      });
+      .help("Choose an icon style from the icon config")
+      .default_value(std::string("star"));
 
-  // TODO:输出到文件, 可选, 暂时未实现
+  program.add_argument("-c", "--icon-config")
+      .help("Path to icon config json")
+      .default_value(std::string(kDefaultIconConfigPath));
+
+  // TODO: output to a file.
   program.add_argument("-o", "--output")
       .help("Output to a file")
       .default_value(std::string(""));
+}
 
-  program.usage();
+std::unique_ptr<JsonStyleFactory> createStyleFactory(
+    const std::string& style) {
+  std::unique_ptr<JsonStyleFactory> factory = JsonFactory::getFactory(style);
+  if (factory == nullptr) {
+    throw std::runtime_error("Style factory not registered: " + style);
+  }
+  return factory;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  argparse::ArgumentParser program("FJE");
+  configureArgumentParser(program);
 
   try {
     program.parse_args(argc, argv);
@@ -68,32 +129,23 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  // 解析参数
-  std::string json_file_path = program.get<std::string>("-f");
-  std::string style = program.get<std::string>("-s");
-  std::string iconStyle = program.get<std::string>("-i");
-  std::string output = program.get<std::string>("-o");
+  try {
+    const std::string jsonFilePath = program.get<std::string>("--file");
+    const std::string style = program.get<std::string>("--style");
+    const std::string iconStyle = program.get<std::string>("--icon");
+    const std::string iconConfigPath =
+        program.get<std::string>("--icon-config");
 
-  std::ifstream json_file(json_file_path);
-  if (!json_file.is_open()) {
-    std::cout << "File not found: " << json_file_path << std::endl;
+    json iconConfig = loadJsonFile(iconConfigPath, "icon config");
+    configureIcon(iconConfig, iconStyle);
+
+    json data = loadJsonFile(jsonFilePath, "json file");
+    std::unique_ptr<JsonStyleFactory> factory = createStyleFactory(style);
+
+    FunnyJsonExplorer fje(std::move(factory));
+    fje.show(data);
+  } catch (const std::runtime_error& err) {
+    std::cout << err.what() << std::endl;
     return 1;
   }
-  // 解析json文件
-  json data = json::parse(json_file);
-  // 根据style选择工厂
-  std::unique_ptr<JsonStyleFactory> factory = JsonFactory::getFactory(style);
-  // 根据配置文件的icon 设置全局唯一的icon实例
-  for (auto it = icon_config.begin(); it != icon_config.end(); ++it) {
-    if (it.key() == iconStyle) {
-      Icon& icon = Icon::getInstance();
-      icon.leafIcon = it.value()["leaf"];
-      icon.containerIcon = it.value()["container"];
-      icon.name = iconStyle;
-    }
-  }
-
-  // 创建FJE并显示相应风格json
-  FunnyJsonExplorer fje(std::move(factory));
-  fje.show(data);
 }

@@ -5,6 +5,7 @@
 #include <Node.hpp>
 #include <memory>
 #include <nlohmann/json.hpp>
+#include <string>
 
 using json = nlohmann::json;
 
